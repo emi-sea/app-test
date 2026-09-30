@@ -1,0 +1,101 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-init-script
+  namespace: laboratorio-emilio
+data:
+  # La imagen solo ejecuta *.sh (no *.sql). postgresql-start corre
+  # después de crear el usuario y la base, en cada arranque.
+  init-schema.sh: |
+    #!/bin/bash
+    psql --dbname="$POSTGRESQL_DATABASE" --set ON_ERROR_STOP=1 <<SQL
+    CREATE TABLE IF NOT EXISTS probe_items (
+        id          SERIAL PRIMARY KEY,
+        name        TEXT NOT NULL,
+        value       TEXT NOT NULL,
+        category    TEXT NOT NULL,
+        created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    INSERT INTO probe_items (name, value, category)
+    SELECT
+        'item-' || g,
+        'payload-' || md5(g::text || clock_timestamp()::text),
+        (ARRAY['alpha', 'beta', 'gamma', 'delta', 'epsilon'])[1 + (g % 5)]
+    FROM generate_series(1, 300) AS g
+    WHERE NOT EXISTS (SELECT 1 FROM probe_items);
+
+    ALTER TABLE probe_items OWNER TO ${POSTGRESQL_USER};
+    SQL
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ha-probe-db
+  namespace: laboratorio-emilio
+type: Opaque
+stringData:
+  # Credenciales para PostgreSQL y URL final para la App Flask
+  postgres-password: "SuperSecretPassword123"
+  database-url: "postgresql://probe:SuperSecretPassword123@postgres-service:5432/probe"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  namespace: laboratorio-emilio
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+      - name: postgres
+        image: registry.redhat.io/rhel9/postgresql-15:latest
+        env:
+        - name: POSTGRESQL_USER
+          value: "probe"
+        - name: POSTGRESQL_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: ha-probe-db
+              key: postgres-password
+        - name: POSTGRESQL_DATABASE
+          value: "probe"
+        - name: POSTGRESQL_ADMIN_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: ha-probe-db
+              key: postgres-password
+        ports:
+        - containerPort: 5432
+        volumeMounts:
+        - name: init-script-volume
+          mountPath: /opt/app-root/src/postgresql-start
+        - name: ephemeral-storage
+          mountPath: /var/lib/pgsql/data
+      volumes:
+      - name: init-script-volume
+        configMap:
+          name: postgres-init-script
+      - name: ephemeral-storage
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-service
+  namespace: laboratorio-emilio
+spec:
+  selector:
+    app: postgres
+  ports:
+  - protocol: TCP
+    port: 5432
+    targetPort: 5432
+

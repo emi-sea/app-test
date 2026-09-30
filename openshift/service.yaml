@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: ha-probe
+  labels:
+    app: ha-probe
+spec:
+  selector:
+    app: ha-probe
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+  type: ClusterIP

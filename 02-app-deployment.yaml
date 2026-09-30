@@ -1,0 +1,76 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ha-probe
+  namespace: laboratorio-emilio
+  labels:
+    app: ha-probe
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1       # Crea un pod nuevo antes de apagar el viejo
+      maxUnavailable: 0 # Garantiza que siempre haya pods atendiendo tráfico
+  selector:
+    matchLabels:
+      app: ha-probe
+  template:
+    metadata:
+      labels:
+        app: ha-probe
+    spec:
+      containers:
+      - name: ha-probe
+        image: image-registry.openshift-image-registry.svc:5000/laboratorio-emilio/ha-probe:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8080
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: ha-probe-db
+              key: database-url
+        - name: QUERY_INTERVAL_MS
+          value: "750"
+        livenessProbe:
+          httpGet:
+            path: /health/live
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health/ready
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ha-probe-service
+  namespace: laboratorio-emilio
+spec:
+  selector:
+    app: ha-probe
+  ports:
+  - protocol: TCP
+    port: 8080
+    targetPort: 8080
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: ha-probe-route
+  namespace: laboratorio-emilio
+spec:
+  to:
+    kind: Service
+    name: ha-probe-service
+  port:
+    targetPort: 8080
+

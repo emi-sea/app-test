@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <title>HA Probe — PostgreSQL</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <main class="layout">
+    <header class="header">
+      <p class="brand">HA Probe</p>
+      <h1>Consultas aleatorias a PostgreSQL</h1>
+      <p class="subtitle">Sin cache. Cada poll golpea la base. Ideal para medir HA y downtime en OpenShift.</p>
+    </header>
+
+    <section class="controls" aria-label="Controles">
+      <label>
+        Intervalo (ms)
+        <input id="interval" type="number" min="100" step="50" value="{{ query_interval_ms }}">
+      </label>
+      <button id="toggle" type="button">Pausar</button>
+      <button id="reset" type="button" class="ghost">Reset métricas</button>
+      <span class="pill" id="run-state">corriendo</span>
+    </section>
+
+    <section class="metrics" aria-label="Métricas">
+      <article>
+        <h2>Total</h2>
+        <p class="value" id="total">0</p>
+      </article>
+      <article>
+        <h2>OK</h2>
+        <p class="value ok" id="ok">0</p>
+      </article>
+      <article>
+        <h2>FAIL</h2>
+        <p class="value fail" id="fail">0</p>
+      </article>
+      <article>
+        <h2>Latencia</h2>
+        <p class="value" id="latency">—</p>
+      </article>
+      <article>
+        <h2>Downtime</h2>
+        <p class="value fail" id="downtime">0.00 s</p>
+      </article>
+      <article>
+        <h2>Pod</h2>
+        <p class="value mono" id="pod">{{ hostname }}</p>
+      </article>
+    </section>
+
+    <section class="panels">
+      <article class="panel">
+        <h2>Latencia reciente</h2>
+        <canvas id="chart" width="640" height="160" aria-label="Gráfico de latencia"></canvas>
+      </article>
+      <article class="panel">
+        <h2>Última respuesta</h2>
+        <pre id="last-response" class="mono">Esperando primera consulta…</pre>
+      </article>
+      <article class="panel">
+        <h2>Ventanas de downtime</h2>
+        <ul id="downtime-list" class="downtime-list">
+          <li class="muted">Sin downtime registrado</li>
+        </ul>
+      </article>
+      <article class="panel">
+        <h2>Último error</h2>
+        <pre id="last-error" class="mono muted">Ninguno</pre>
+      </article>
+    </section>
+  </main>
+
+  <script>
+    window.PROBE_DEFAULT_INTERVAL_MS = Number(document.getElementById("interval").value) || 750;
+  </script>
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
